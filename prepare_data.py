@@ -277,6 +277,84 @@ def prepare_squirrel_ai(min_interactions_per_user):
     np.savetxt(os.path.join(data_path, "bkt_splits.txt"), bkt_split, fmt='%i')
 
 
+def prepare_new_sqai(min_interactions_per_user=5, train_split=0.8):
+    """Preprocess Squirrel AI dataset.
+
+    Arguments:
+        min_interactions_per_user (int): minimum number of interactions per student
+
+    Outputs:
+        df (pandas DataFrame): preprocessed Squirrel AI dataset with user_id, item_id,
+            timestamp, correct and unique skill features
+        Q_mat (item-skill relationships sparse array): corresponding q-matrix
+    """
+    data_path = "data/new_sqai"
+    df = pd.read_csv(os.path.join(data_path, "ElemMATHdata.csv"), nrows=1000000)
+
+    df = df[['user_id', 'question_ids', 'server_time', 'is_right', 'tag_code']].dropna()
+    df = df.rename(columns={'question_ids': 'item_id',
+                              'is_right': 'correct',
+                              'tag_code': 'skill_id'})
+
+    # Timestamp in seconds
+    # train_df["timestamp"] = train_df["decimalTimeAnswered"] * 3600 * 24
+    # train_df["timestamp"] = (train_df["timestamp"] - train_df["timestamp"].min()).astype(np.int64)
+    # test_df["timestamp"] = test_df["decimalTimeAnswered"] * 3600 * 24
+    # test_df["timestamp"] = (test_df["timestamp"] - test_df["timestamp"].min()).astype(np.int64)
+    df["timestamp"] = df["server_time"] * 3600 * 24
+    df["timestamp"] = (df["server_time"] - df["server_time"].min()).astype(np.int64)
+
+    # zero-index skills and items and convert everything to int
+    # df["item_id"] = (df["item_id"] - df["item_id"].min()).astype(np.int64)
+    # df["skill_id"] = (df["skill_id"] - df["skill_id"].min()).astype(np.int64)
+    # df["is_right"] = df["is_right"].astype(np.int64)
+    # convert everything to int
+    df["item_id"] = df["item_id"].astype(np.int64)
+    df["skill_id"] = df["skill_id"].astype(np.int64)
+    df["correct"] = df["correct"].astype(np.int64)
+
+    # Train-test split
+    users = df["user_id"].unique()
+    np.random.shuffle(users)
+    split = int(train_split * len(users))
+    train_df = df[df["user_id"].isin(users[:split])]
+    test_df = df[df["user_id"].isin(users[split:])]
+
+    # Filter too short sequences
+    train_df = train_df.groupby("user_id").filter(lambda x: len(x) >= min_interactions_per_user)
+    test_df = test_df.groupby("user_id").filter(lambda x: len(x) >= min_interactions_per_user)
+
+    # zero indexed user id, and keeping the test user id different from the train ones
+    train_df["user_id"] = np.unique(train_df["user_id"], return_inverse=True)[1]
+    test_df["user_id"] = np.unique(test_df["user_id"], return_inverse=True)[1] + train_df["user_id"].nunique()
+
+    # Build Q-matrix
+    num_items = max(train_df["item_id"].max(), test_df["item_id"].max()) + 1
+    num_skills = max(train_df["skill_id"].max(), test_df["skill_id"].max()) + 1
+    Q_mat = np.zeros((num_items, num_skills))
+    for df in (train_df, test_df):
+        for item_id, skill_id in df[["item_id", "skill_id"]].values:
+            Q_mat[item_id, skill_id] = 1
+
+    # Get unique skill id from combination of all skill ids
+    unique_skill_ids = np.unique(Q_mat, axis=0, return_inverse=True)[1]
+    train_df["skill_id"] = unique_skill_ids[train_df["item_id"]]
+    test_df["skill_id"] = unique_skill_ids[test_df["item_id"]]
+
+    # Data is already sorted by users and temporally for each user
+    train_df = train_df[["user_id", "item_id", "timestamp", "correct", "skill_id"]]
+    test_df = test_df[["user_id", "item_id", "timestamp", "correct", "skill_id"]]
+    df = pd.concat([train_df, test_df])
+    train_df.reset_index(inplace=True, drop=True)
+    test_df.reset_index(inplace=True, drop=True)
+    df.reset_index(inplace=True, drop=True)
+
+    # Save data
+    sparse.save_npz(os.path.join(data_path, "q_mat.npz"), sparse.csr_matrix(Q_mat))
+    train_df.to_csv(os.path.join(data_path, f"preprocessed_data_train.csv"), sep="\t", index=False)
+    test_df.to_csv(os.path.join(data_path, f"preprocessed_data_test.csv"), sep="\t", index=False)
+    df.to_csv(os.path.join(data_path, f"preprocessed_data.csv"), sep="\t", index=False)
+
 def prepare_spanish(train_split=0.8):
     """Preprocess Spanish dataset.
 
@@ -352,3 +430,5 @@ if __name__ == "__main__":
             min_interactions_per_user=args.min_interactions)
     elif args.dataset == "spanish":
         prepare_spanish()
+    elif args.dataset == "new_sqai":
+        prepare_new_sqai()
