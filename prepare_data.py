@@ -277,11 +277,13 @@ def prepare_squirrel_ai(min_interactions_per_user):
     np.savetxt(os.path.join(data_path, "bkt_splits.txt"), bkt_split, fmt='%i')
 
 
-def prepare_new_sqai(min_interactions_per_user=5, train_split=0.8):
+def prepare_new_sqai(df=None, min_interactions_per_user=5, train_split=0.8, num_users_to_train=121005):
     """Preprocess Squirrel AI dataset.
 
     Arguments:
         min_interactions_per_user (int): minimum number of interactions per student
+        train_split (float < 1): percentage to split into train data
+         num_users_to_train (int): number of users to train on. Default to 121005, the total number of users
 
     Outputs:
         df (pandas DataFrame): preprocessed Squirrel AI dataset with user_id, item_id,
@@ -289,29 +291,16 @@ def prepare_new_sqai(min_interactions_per_user=5, train_split=0.8):
         Q_mat (item-skill relationships sparse array): corresponding q-matrix
     """
     data_path = "data/new_sqai"
-    df = pd.read_csv(os.path.join(data_path, "ElemMATHdata.csv"), nrows=1000000)
+    df = pd.read_csv(os.path.join(data_path, "ElemMATHdata.csv"), nrows=1000000) #1M data
+    if df is None:
+        df = pd.read_csv(os.path.join(data_path, "ElemMATHdata.csv"))
+    print('# of data imported: ' + str(df.shape[0]))
 
     df = df[['user_id', 'question_ids', 'server_time', 'is_right', 'tag_code']].dropna()
     df = df.rename(columns={'question_ids': 'item_id',
                               'is_right': 'correct',
                               'tag_code': 'skill_id'})
-
-    # Timestamp in seconds
-    # train_df["timestamp"] = train_df["decimalTimeAnswered"] * 3600 * 24
-    # train_df["timestamp"] = (train_df["timestamp"] - train_df["timestamp"].min()).astype(np.int64)
-    # test_df["timestamp"] = test_df["decimalTimeAnswered"] * 3600 * 24
-    # test_df["timestamp"] = (test_df["timestamp"] - test_df["timestamp"].min()).astype(np.int64)
-    df["timestamp"] = df["server_time"] * 3600 * 24
-    df["timestamp"] = (df["server_time"] - df["server_time"].min()).astype(np.int64)
-
-    # zero-index skills and items and convert everything to int
-    # df["item_id"] = (df["item_id"] - df["item_id"].min()).astype(np.int64)
-    # df["skill_id"] = (df["skill_id"] - df["skill_id"].min()).astype(np.int64)
-    # df["is_right"] = df["is_right"].astype(np.int64)
-    # convert everything to int
-    df["item_id"] = df["item_id"].astype(np.int64)
-    df["skill_id"] = df["skill_id"].astype(np.int64)
-    df["correct"] = df["correct"].astype(np.int64)
+    print('# of data after dropna: ' + str(df.shape[0]))
 
     # Train-test split
     users = df["user_id"].unique()
@@ -319,10 +308,48 @@ def prepare_new_sqai(min_interactions_per_user=5, train_split=0.8):
     split = int(train_split * len(users))
     train_df = df[df["user_id"].isin(users[:split])]
     test_df = df[df["user_id"].isin(users[split:])]
+    print('# of users in initial training split: ' + str(split))
+    print('# of users in initial testing split: ' + str(len(users) - split))
+    print('# of initial training data: ' + str(train_df.shape[0]))
+    print('# of initial testing data: ' + str(test_df.shape[0]))
 
     # Filter too short sequences
     train_df = train_df.groupby("user_id").filter(lambda x: len(x) >= min_interactions_per_user)
     test_df = test_df.groupby("user_id").filter(lambda x: len(x) >= min_interactions_per_user)
+    print('# of users in filtered training split: ' + str(len(train_df["user_id"].unique())))
+    print('# of users in filtered testing split: ' + str(len(test_df["user_id"].unique())))
+    print('# of filtered training data: ' + str(train_df.shape[0]))
+    print('# of filtered testing data: ' + str(test_df.shape[0]))
+
+    # Cut down number of users to train as specified
+    train_users = train_df["user_id"].unique()
+    if len(train_users) > num_users_to_train:
+        train_df = train_df[train_df["user_id"].isin(train_users[:num_users_to_train])]
+    print('# of users in final training split: ' + str(len(train_df["user_id"].unique())))
+    print('# of final training data: ' + str(train_df.shape[0]))
+
+    print('# of correct in final training split: ' + str(len(train_df[train_df.correct == 1])))
+    print('# of incorrect in final training split: ' + str(len(train_df[train_df.correct == 0])))
+    print('# of correct in final test split: ' + str(len(test_df[test_df.correct == 1])))
+    print('# of incorrect in final test split: ' + str(len(test_df[test_df.correct == 0])))
+
+    # Timestamp in seconds
+    train_df["timestamp"] = train_df["server_time"] * 3600 * 24
+    train_df["timestamp"] = (train_df["timestamp"] - train_df["timestamp"].min()).astype(np.int64)
+    test_df["timestamp"] = test_df["server_time"] * 3600 * 24
+    test_df["timestamp"] = (test_df["timestamp"] - test_df["timestamp"].min()).astype(np.int64)
+
+    # zero-index skills and items and convert everything to int
+    # df["item_id"] = (df["item_id"] - df["item_id"].min()).astype(np.int64)
+    # df["skill_id"] = (df["skill_id"] - df["skill_id"].min()).astype(np.int64)
+    # df["is_right"] = df["is_right"].astype(np.int64)
+    # convert everything to int
+    train_df["item_id"] = train_df["item_id"].astype(np.int64)
+    train_df["skill_id"] = train_df["skill_id"].astype(np.int64)
+    train_df["correct"] = train_df["correct"].astype(np.int64)
+    test_df["item_id"] = test_df["item_id"].astype(np.int64)
+    test_df["skill_id"] = test_df["skill_id"].astype(np.int64)
+    test_df["correct"] = test_df["correct"].astype(np.int64)
 
     # zero indexed user id, and keeping the test user id different from the train ones
     train_df["user_id"] = np.unique(train_df["user_id"], return_inverse=True)[1]
@@ -337,6 +364,11 @@ def prepare_new_sqai(min_interactions_per_user=5, train_split=0.8):
             Q_mat[item_id, skill_id] = 1
 
     # Get unique skill id from combination of all skill ids
+    # np.unique(Q_mat, axis=0) gives the matrix that collects the unique rows in Q_mat
+    # two rows are the same when two different items with the same skill associated are submitted the same number of times
+    # unique_skill_ids maps from the Q_mat rows to the unique matrix rows
+    # skill_id column is updated to 0 or 1 indexed skills
+    # originally same skills are assigned different skill ids if they are submitted in different times
     unique_skill_ids = np.unique(Q_mat, axis=0, return_inverse=True)[1]
     train_df["skill_id"] = unique_skill_ids[train_df["item_id"]]
     test_df["skill_id"] = unique_skill_ids[test_df["item_id"]]
