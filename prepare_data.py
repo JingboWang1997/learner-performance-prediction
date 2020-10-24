@@ -291,15 +291,16 @@ def prepare_new_sqai(df=None, min_interactions_per_user=5, train_split=0.8, num_
         Q_mat (item-skill relationships sparse array): corresponding q-matrix
     """
     data_path = "data/new_sqai"
-    df = pd.read_csv(os.path.join(data_path, "ElemMATHdata.csv"), nrows=1000000) #1M data
+    # df = pd.read_csv(os.path.join(data_path, "ElemMATHdata.csv"), nrows=1000000) #1M data
     if df is None:
         df = pd.read_csv(os.path.join(data_path, "ElemMATHdata.csv"))
     print('# of data imported: ' + str(df.shape[0]))
 
-    df = df[['user_id', 'question_ids', 'server_time', 'is_right', 'tag_code']].dropna()
+    df = df[['user_id', 'question_ids', 'server_time', 'is_right', 'tag_code', 'school_id', 'q_difficulty']].dropna()
     df = df.rename(columns={'question_ids': 'item_id',
                               'is_right': 'correct',
-                              'tag_code': 'skill_id'})
+                              'tag_code': 'skill_id',
+                            'q_difficulty': 'item_difficulty'})
     print('# of data after dropna: ' + str(df.shape[0]))
 
     # Train-test split
@@ -327,11 +328,13 @@ def prepare_new_sqai(df=None, min_interactions_per_user=5, train_split=0.8, num_
         train_df = train_df[train_df["user_id"].isin(train_users[:num_users_to_train])]
     print('# of users in final training split: ' + str(len(train_df["user_id"].unique())))
     print('# of final training data: ' + str(train_df.shape[0]))
-
     print('# of correct in final training split: ' + str(len(train_df[train_df.correct == 1])))
     print('# of incorrect in final training split: ' + str(len(train_df[train_df.correct == 0])))
     print('# of correct in final test split: ' + str(len(test_df[test_df.correct == 1])))
     print('# of incorrect in final test split: ' + str(len(test_df[test_df.correct == 0])))
+
+    # separate df for video watches for each user
+
 
     # Timestamp in seconds
     train_df["timestamp"] = train_df["server_time"] * 3600 * 24
@@ -347,13 +350,17 @@ def prepare_new_sqai(df=None, min_interactions_per_user=5, train_split=0.8, num_
     train_df["item_id"] = train_df["item_id"].astype(np.int64)
     train_df["skill_id"] = train_df["skill_id"].astype(np.int64)
     train_df["correct"] = train_df["correct"].astype(np.int64)
+    train_df["school_id"] = train_df["school_id"].astype(np.int64)
+    train_df["item_difficulty"] = train_df["item_difficulty"].astype(np.int64)
     test_df["item_id"] = test_df["item_id"].astype(np.int64)
     test_df["skill_id"] = test_df["skill_id"].astype(np.int64)
     test_df["correct"] = test_df["correct"].astype(np.int64)
+    test_df["school_id"] = test_df["school_id"].astype(np.int64)
+    test_df["item_difficulty"] = test_df["item_difficulty"].astype(np.int64)
 
     # zero indexed user id, and keeping the test user id different from the train ones
-    train_df["user_id"] = np.unique(train_df["user_id"], return_inverse=True)[1]
-    test_df["user_id"] = np.unique(test_df["user_id"], return_inverse=True)[1] + train_df["user_id"].nunique()
+    # train_df["user_id"] = np.unique(train_df["user_id"], return_inverse=True)[1]
+    # test_df["user_id"] = np.unique(test_df["user_id"], return_inverse=True)[1] + train_df["user_id"].nunique()
 
     # Build Q-matrix
     num_items = max(train_df["item_id"].max(), test_df["item_id"].max()) + 1
@@ -374,8 +381,8 @@ def prepare_new_sqai(df=None, min_interactions_per_user=5, train_split=0.8, num_
     test_df["skill_id"] = unique_skill_ids[test_df["item_id"]]
 
     # Data is already sorted by users and temporally for each user
-    train_df = train_df[["user_id", "item_id", "timestamp", "correct", "skill_id"]]
-    test_df = test_df[["user_id", "item_id", "timestamp", "correct", "skill_id"]]
+    train_df = train_df[["user_id", "item_id", "timestamp", "correct", "skill_id", "school_id", "item_difficulty"]]
+    test_df = test_df[["user_id", "item_id", "timestamp", "correct", "skill_id", "school_id", "item_difficulty"]]
     df = pd.concat([train_df, test_df])
     train_df.reset_index(inplace=True, drop=True)
     test_df.reset_index(inplace=True, drop=True)

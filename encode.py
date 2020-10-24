@@ -33,11 +33,15 @@ def df_to_sparse(df, Q_mat, active_features):
     """
     num_items, num_skills = Q_mat.shape
     features = {}
+    # features:
+    # df (numpy, length = # original features)
+    # s (Compressed Sparse Row matrix, length = # of skills)
 
     # Counters for continuous time windows
     counters = defaultdict(lambda: TimeWindowQueue(WINDOW_LENGTHS))
 
     # Transform q-matrix into dictionary for fast lookup
+    # mapping from item to a set of skills
     Q_mat_dict = {i: set() for i in range(num_items)}
     for i, j in np.argwhere(Q_mat == 1):
         Q_mat_dict[i].add(j)
@@ -107,6 +111,16 @@ def df_to_sparse(df, Q_mat, active_features):
                 # Past attempts for relevant skills
                 if 'sc' in active_features:
                     tmp = np.vstack((np.zeros(num_skills), skills))[:-1]
+                    # attempts record the count of attempts on each skill at each time step (a row represent a timestamp)
+                    # total of 4 skills, this student did 3 items (2 with skill 0, 1 with skill 1)
+                    # [1, 0, 0, 0]
+                    # [1, 0, 0, 0]
+                    # [0, 1, 0, 0]
+                    # attempts:
+                    # [1, 0, 0, 0]
+                    # [2, 0, 0, 0]
+                    # [2, 1, 0, 0]
+                    # each cell is taken log
                     attempts[:, :num_skills] = phi(np.cumsum(tmp, 0) * skills)
 
                 # Past attempts for item
@@ -181,6 +195,18 @@ def df_to_sparse(df, Q_mat, active_features):
     if 'i' in active_features:
         features['i'] = onehot.fit_transform(features["df"][:, 1].reshape(-1, 1))
 
+    # More features for sqai ElemMATHdata 2020
+
+    # Videos
+    if 'v' in active_features:
+
+    # School one hot encoding
+    if 'sch' in active_features:
+
+    # Difficulties
+    if 'd' in active_features:
+
+
     X = sparse.hstack([sparse.csr_matrix(features['df']),
                        sparse.hstack([features[x] for x in features.keys() if x != 'df'])]).tocsr()
     return X
@@ -207,6 +233,12 @@ if __name__ == "__main__":
                         help='If True, historical counts include attempts.')
     parser.add_argument('-tw', action='store_true',
                         help='If True, historical counts are encoded as time windows.')
+    parser.add_argument('-v', action='store_true',
+                        help='If True, historical counts include videos.')
+    parser.add_argument('-sch', action='store_true',
+                        help='If True, include school one hot encoding.')
+    parser.add_argument('-d', action='store_true',
+                        help='If True, historical difficulties of items.')
     args = parser.parse_args()
 
     data_path = os.path.join('data', args.dataset)
@@ -214,7 +246,7 @@ if __name__ == "__main__":
     df = df[["user_id", "item_id", "timestamp", "correct", "skill_id"]]
     Q_mat = sparse.load_npz(os.path.join(data_path, 'q_mat.npz')).toarray()
 
-    all_features = ['u', 'i', 's', 'ic', 'sc', 'tc', 'w', 'a', 'tw']
+    all_features = ['u', 'i', 's', 'ic', 'sc', 'tc', 'w', 'a', 'tw', 'v', 'sch', 'd']
     active_features = [features for features in all_features if vars(args)[features]]
     features_suffix = ''.join(active_features)
 

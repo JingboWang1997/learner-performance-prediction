@@ -10,8 +10,9 @@ from train_lr import compute_metrics
 
 data_path = 'data/new_sqai/'
 original_df = pd.read_csv(os.path.join(data_path, "ElemMATHdata.csv"))
-for i in range(5, 7):
-
+stats = []
+for i in range(5, 18):
+    print('using user: ' + str(np.power(2, i)))
     prepare_new_sqai(df=original_df, num_users_to_train=np.power(2, i))
 
     df = pd.read_csv(os.path.join(data_path, 'preprocessed_data.csv'), sep="\t")
@@ -31,6 +32,7 @@ for i in range(5, 7):
     #
     # # Load sparse dataset
     # X = csr_matrix(load_npz(args.X_file))
+    # print('encoded')
 
     train_df = pd.read_csv(os.path.join(data_path, 'preprocessed_data_train.csv'), sep="\t")
     test_df = pd.read_csv(os.path.join(data_path, 'preprocessed_data_test.csv'), sep="\t")
@@ -47,7 +49,7 @@ for i in range(5, 7):
     X_test, y_test = test[:, 5:], test[:, 3].toarray().flatten()
 
     # Train
-    model = LogisticRegression(solver="lbfgs", max_iter=args.iter)
+    model = LogisticRegression(solver="lbfgs", max_iter=1000)
     model.fit(X_train, y_train)
 
     y_pred_train = model.predict_proba(X_train)[:, 1]
@@ -56,11 +58,13 @@ for i in range(5, 7):
     # # Write predictions to csv
     # test_df[f"LR_{features_suffix}"] = y_pred_test
     # test_df.to_csv(f'data/{args.dataset}/preprocessed_data_test.csv', sep="\t", index=False)
+    # print('obtained results')
 
     acc_train, auc_train, nll_train, mse_train = compute_metrics(y_pred_train, y_train)
     acc_test, auc_test, nll_test, mse_test = compute_metrics(y_pred_test, y_test)
-    print(f"{args.dataset}, features = {features_suffix}, "
-          f"auc_train = {auc_train}, auc_test = {auc_test}, "
-          f"mse_train = {mse_train}, mse_test = {mse_test}")
+    stats.append([np.power(2, i), acc_train, auc_train, nll_train, mse_train, acc_test, auc_test, nll_test, mse_test])
+    np.save('stats', stats)
+    # print(f"auc_train = {auc_train}, auc_test = {auc_test}, "
+    #       f"mse_train = {mse_train}, mse_test = {mse_test}")
 
 
