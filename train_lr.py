@@ -61,13 +61,15 @@ if __name__ == "__main__":
         stats = []
         for i in range(5, 18):
             print('using user: ' + str(np.power(2, i)))
-            train = X[np.where(np.isin(user_ids, users_train[:np.power(2, i)]))]
+            train = X[np.where(np.isin(user_ids, users_train[:min(np.power(2, i), len(users_train))]))]
             acc_train, auc_train, nll_train, mse_train, acc_test, auc_test, nll_test, mse_test = train_func(
                 train,
                 test,
                 args)
             stats.append([np.power(2, i), acc_train, auc_train, nll_train, mse_train, acc_test, auc_test, nll_test, mse_test])
             np.save(f'stats_{features_suffix}', stats)
+            if np.power(2, i) > len(users_train):
+                break
     else:
         acc_train, auc_train, nll_train, mse_train, acc_test, auc_test, nll_test, mse_test = train_func(train, test, args)
         print(f"{args.dataset}, features = {features_suffix}, "

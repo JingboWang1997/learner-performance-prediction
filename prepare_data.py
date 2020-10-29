@@ -305,7 +305,7 @@ def prepare_new_sqai(df=None, min_interactions_per_user=5, train_split=0.8, num_
 
     # Train-test split
     users = df["user_id"].unique()
-    np.random.shuffle(users)
+    # np.random.shuffle(users)
     split = int(train_split * len(users))
     train_df = df[df["user_id"].isin(users[:split])]
     test_df = df[df["user_id"].isin(users[split:])]

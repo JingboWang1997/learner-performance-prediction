@@ -3,8 +3,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-stats = np.load('stats.npy')
+stats = np.load('stats_isicsctcwad.npy')
 x = stats[:, 0]
+print('final stats:')
+print(stats[-1])
 acc_train = stats[:, 1]
 auc_train = stats[:, 2]
 nll_train = stats[:, 3]
