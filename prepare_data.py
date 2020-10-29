@@ -277,13 +277,13 @@ def prepare_squirrel_ai(min_interactions_per_user):
     np.savetxt(os.path.join(data_path, "bkt_splits.txt"), bkt_split, fmt='%i')
 
 
-def prepare_new_sqai(df=None, min_interactions_per_user=5, train_split=0.8, num_users_to_train=121005):
+def prepare_new_sqai(df=None, min_interactions_per_user=5, train_split=0.8, num_users_to_train=8000):
     """Preprocess Squirrel AI dataset.
 
     Arguments:
         min_interactions_per_user (int): minimum number of interactions per student
         train_split (float < 1): percentage to split into train data
-         num_users_to_train (int): number of users to train on. Default to 121005, the total number of users
+         num_users_to_train (int): number of users to train on. Default to 8000, the convergence point based on training plot
 
     Outputs:
         df (pandas DataFrame): preprocessed Squirrel AI dataset with user_id, item_id,

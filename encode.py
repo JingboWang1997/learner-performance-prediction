@@ -19,6 +19,26 @@ def phi(x):
 WINDOW_LENGTHS = [3600 * 24 * 30, 3600 * 24 * 7, 3600 * 24, 3600]
 NUM_WINDOWS = len(WINDOW_LENGTHS) + 1
 
+def cum_mean(col):
+    cum_sum = np.cumsum(col, axis=0)
+    for i in range(cum_sum.shape[0]):
+        if i == 0:
+            continue
+        cum_sum[i] =  cum_sum[i] / (i + 1)
+    return cum_sum
+
+def ave_difficulties(df_user):
+    df_difficulties = df_user[:, 6].reshape(-1, 1)
+    return cum_mean(df_difficulties)
+
+def get_difficulty_feature(df_user):
+    # average difficulty for this user at each item
+    user_ave_difficulties = ave_difficulties(df_user)
+    # shift down one cell so the average difficulty doesn't include the current difficulty
+    user_past_ave_difficulties = np.vstack((np.zeros(1), user_ave_difficulties))[:-1]
+    # combine past difficulties count with the current difficulty
+    difficulty_feature = np.hstack((user_past_ave_difficulties, df_user[:, 6].reshape(-1, 1))).reshape(-1, 2)
+    return difficulty_feature
 
 def df_to_sparse(df, Q_mat, active_features):
     """Build sparse dataset from dense dataset and q-matrix.
@@ -61,9 +81,15 @@ def df_to_sparse(df, Q_mat, active_features):
             else:
                 features[key] = sparse.csr_matrix(np.empty((0, num_skills + 2)))
 
+    # More features for sqai ElemMATHdata 2020
+    # Past item difficulties
+    if 'd' in active_features:
+        # difficulty feature: [current item difficulty, average difficulties completed]
+        features["d"] = sparse.csr_matrix(np.empty((0, 2)))
+
     # Build feature rows by iterating over users
     for user_id in df["user_id"].unique():
-        df_user = df[df["user_id"] == user_id][["user_id", "item_id", "timestamp", "correct", "skill_id"]].copy()
+        df_user = df[df["user_id"] == user_id][["user_id", "item_id", "timestamp", "correct", "skill_id", "school_id", "item_difficulty"]].copy()
         df_user = df_user.values
         num_items_user = df_user.shape[0]
 
@@ -77,6 +103,9 @@ def df_to_sparse(df, Q_mat, active_features):
         # Current skills one hot encoding
         if 's' in active_features:
             features['s'] = sparse.vstack([features["s"], sparse.csr_matrix(skills)])
+
+        if 'd' in active_features:
+            features['d'] = sparse.vstack([features['d'], sparse.csr_matrix(get_difficulty_feature(df_user))])
 
         # Attempts
         if 'a' in active_features:
@@ -188,6 +217,7 @@ def df_to_sparse(df, Q_mat, active_features):
 
             features['w'] = sparse.vstack([features['w'], sparse.csr_matrix(wins)])
 
+
     # User and item one hot encodings
     onehot = OneHotEncoder()
     if 'u' in active_features:
@@ -196,16 +226,23 @@ def df_to_sparse(df, Q_mat, active_features):
         features['i'] = onehot.fit_transform(features["df"][:, 1].reshape(-1, 1))
 
     # More features for sqai ElemMATHdata 2020
-
     # Videos
-    if 'v' in active_features:
+    # if 'v' in active_features:
 
     # School one hot encoding
     if 'sch' in active_features:
+        features['sch'] = onehot.fit_transform(features["df"][:, 5].reshape(-1, 1))
 
-    # Difficulties
-    if 'd' in active_features:
-
+    # check
+    # user_id = df["user_id"].unique()[0]
+    # df_user = df[df["user_id"] == user_id][["user_id", "item_id", "timestamp", "correct", "skill_id", "school_id", "item_difficulty"]].copy()
+    # df_user = df_user.values
+    # num_items_user = df_user.shape[0]
+    # for i in range(num_items_user):
+    #     if features['d'][i, 1] != df_user[i, 6]:
+    #         print('d wrong at ' + str(features['d'][i, 1]) + ' ' + str(df_user[i, 6]))
+    #     if features['d'][i, 0] != np.mean(df_user[:i, 6].flatten()):
+    #         print('d ave wrong at ' + str(features['d'][i, 0]) + ' ' + str(np.mean(df_user[:i, 6].flatten())))
 
     X = sparse.hstack([sparse.csr_matrix(features['df']),
                        sparse.hstack([features[x] for x in features.keys() if x != 'df'])]).tocsr()
@@ -243,7 +280,7 @@ if __name__ == "__main__":
 
     data_path = os.path.join('data', args.dataset)
     df = pd.read_csv(os.path.join(data_path, 'preprocessed_data.csv'), sep="\t")
-    df = df[["user_id", "item_id", "timestamp", "correct", "skill_id"]]
+    df = df[["user_id", "item_id", "timestamp", "correct", "skill_id", 'school_id', 'item_difficulty']]
     Q_mat = sparse.load_npz(os.path.join(data_path, 'q_mat.npz')).toarray()
 
     all_features = ['u', 'i', 's', 'ic', 'sc', 'tc', 'w', 'a', 'tw', 'v', 'sch', 'd']

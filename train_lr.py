@@ -14,11 +14,32 @@ def compute_metrics(y_pred, y):
     return acc, auc, nll, mse
 
 
+def train_func(train, test, args):
+    # First 5 columns are the original dataset, including label in column 3
+    X_train, y_train = train[:, 7:], train[:, 3].toarray().flatten()
+    X_test, y_test = test[:, 7:], test[:, 3].toarray().flatten()
+
+    # Train
+    model = LogisticRegression(solver="lbfgs", max_iter=args.iter)
+    model.fit(X_train, y_train)
+
+    y_pred_train = model.predict_proba(X_train)[:, 1]
+    y_pred_test = model.predict_proba(X_test)[:, 1]
+
+    # Write predictions to csv
+    # test_df[f"LR_{features_suffix}"] = y_pred_test
+    # test_df.to_csv(f'data/{args.dataset}/preprocessed_data_test.csv', sep="\t", index=False)
+
+    acc_train, auc_train, nll_train, mse_train = compute_metrics(y_pred_train, y_train)
+    acc_test, auc_test, nll_test, mse_test = compute_metrics(y_pred_test, y_test)
+    return acc_train, auc_train, nll_train, mse_train, acc_test, auc_test, nll_test, mse_test
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train logistic regression on sparse feature matrix.')
     parser.add_argument('--X_file', type=str)
     parser.add_argument('--dataset', type=str)
-    parser.add_argument('--iter', type=int, default=1000)
+    parser.add_argument('--iter', type=int, default=5000)
+    parser.add_argument('--mode', type=str)
     args = parser.parse_args()
 
     features_suffix = (args.X_file.split("-")[-1]).split(".")[0]
@@ -36,23 +57,19 @@ if __name__ == "__main__":
     train = X[np.where(np.isin(user_ids, users_train))]
     test = X[np.where(np.isin(user_ids, users_test))]
 
-    # First 5 columns are the original dataset, including label in column 3
-    X_train, y_train = train[:, 5:], train[:, 3].toarray().flatten()
-    X_test, y_test = test[:, 5:], test[:, 3].toarray().flatten()
-
-    # Train
-    model = LogisticRegression(solver="lbfgs", max_iter=args.iter)
-    model.fit(X_train, y_train)
-
-    y_pred_train = model.predict_proba(X_train)[:, 1]
-    y_pred_test = model.predict_proba(X_test)[:, 1]
-
-    # Write predictions to csv
-    test_df[f"LR_{features_suffix}"] = y_pred_test
-    test_df.to_csv(f'data/{args.dataset}/preprocessed_data_test.csv', sep="\t", index=False)
-
-    acc_train, auc_train, nll_train, mse_train = compute_metrics(y_pred_train, y_train)
-    acc_test, auc_test, nll_test, mse_test = compute_metrics(y_pred_test, y_test)
-    print(f"{args.dataset}, features = {features_suffix}, "
-          f"auc_train = {auc_train}, auc_test = {auc_test}, "
-          f"mse_train = {mse_train}, mse_test = {mse_test}")
+    if args.mode == 'plot':
+        stats = []
+        for i in range(5, 18):
+            print('using user: ' + str(np.power(2, i)))
+            train = X[np.where(np.isin(user_ids, users_train[:np.power(2, i)]))]
+            acc_train, auc_train, nll_train, mse_train, acc_test, auc_test, nll_test, mse_test = train_func(
+                train,
+                test,
+                args)
+            stats.append([np.power(2, i), acc_train, auc_train, nll_train, mse_train, acc_test, auc_test, nll_test, mse_test])
+            np.save(f'stats_{features_suffix}', stats)
+    else:
+        acc_train, auc_train, nll_train, mse_train, acc_test, auc_test, nll_test, mse_test = train_func(train, test, args)
+        print(f"{args.dataset}, features = {features_suffix}, "
+              f"auc_train = {auc_train}, auc_test = {auc_test}, "
+              f"mse_train = {mse_train}, mse_test = {mse_test}")
